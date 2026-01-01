@@ -68,7 +68,41 @@ async function handleTest(request, env) {
   }
 }
 
-// 捐赠数据API处理器
+// 捐赠数据API处理器 - 直接处理HTTP请求，不需要Request对象
+async function handleDonationsDirect(httpMethod, body, env, path) {
+  const method = httpMethod.toUpperCase();
+  
+  try {
+    switch (method) {
+      case 'GET':
+        // 创建一个简单的Request对象，只用于处理GET请求的URL
+        const url = new URL(`http://${env.HOST || 'localhost'}${path}`);
+        const request = new Request(url, {
+          method: httpMethod
+        });
+        return await getDonations(request, env);
+      case 'POST':
+        return await postDonationsDirect(body, env);
+      case 'DELETE':
+        // 创建一个简单的Request对象，只用于处理DELETE请求的URL
+        const deleteUrl = new URL(`http://${env.HOST || 'localhost'}${path}`);
+        const deleteRequest = new Request(deleteUrl, {
+          method: httpMethod
+        });
+        return await deleteDonation(deleteRequest, env, path);
+      default:
+        return createResponse(
+          { success: false, error: 'Method Not Allowed' },
+          405
+        );
+    }
+  } catch (error) {
+    console.error('Donations API error:', error);
+    return createErrorResponse(error);
+  }
+}
+
+// 捐赠数据API处理器 - 兼容旧的Request对象接口
 async function handleDonations(request, env, path) {
   const method = request.method.toUpperCase();
   
@@ -144,7 +178,57 @@ async function getDonations(request, env) {
   });
 }
 
-// 新增捐赠数据
+// 新增捐赠数据 - 直接处理请求体，不需要Request对象
+async function postDonationsDirect(bodyString, env) {
+  const collection = await getDonationCollection(env);
+  let body;
+  
+  // 解析请求体
+  try {
+    body = JSON.parse(bodyString);
+  } catch (error) {
+    return createResponse(
+      { success: false, error: 'Invalid JSON format' },
+      400
+    );
+  }
+  
+  // 验证必需字段
+  if (!body.name || !body.name.trim()) {
+    return createResponse(
+      { success: false, error: '姓名为必填项' },
+      400
+    );
+  }
+  
+  if (!body.project || !body.project.trim()) {
+    return createResponse(
+      { success: false, error: '护持项目为必填项' },
+      400
+    );
+  }
+  
+  // 处理批量数据
+  if (body.data && Array.isArray(body.data)) {
+    return await handleBatchInsert(body.data, collection);
+  }
+  
+  // 单条数据
+  const donationData = createDonationData(body);
+  const result = await collection.insertOne(donationData);
+  
+  return createResponse({
+    success: true,
+    message: '数据保存成功',
+    id: result.insertedId.toString(),
+    data: {
+      ...donationData,
+      _id: result.insertedId.toString()
+    }
+  });
+}
+
+// 新增捐赠数据 - 兼容旧的Request对象接口
 async function postDonations(request, env) {
   const collection = await getDonationCollection(env);
   const body = await request.json();
@@ -332,14 +416,6 @@ export async function handler(event, context) {
   // Netlify Functions 的 event 对象包含请求信息
   const { path, httpMethod, headers, body } = event;
   
-  // 创建 Request 对象
-  const url = new URL(`http://${headers.host}${path}`);
-  const request = new Request(url, {
-    method: httpMethod,
-    headers,
-    body: httpMethod === 'POST' || httpMethod === 'PUT' ? body : undefined
-  });
-  
   // 环境变量
   const env = process.env;
   
@@ -356,11 +432,18 @@ export async function handler(event, context) {
     // 路由分发
     switch (true) {
       case path === '/api/test' || path === '/api/test/':
-        response = await handleTest(request, env);
+        // 直接调用测试处理器，不需要Request对象
+        const url = new URL(`http://${headers.host}${path}`);
+        const testRequest = new Request(url, {
+          method: httpMethod,
+          headers
+        });
+        response = await handleTest(testRequest, env);
         break;
 
       case path === '/api/donations' || path.startsWith('/api/donations/'):
-        response = await handleDonations(request, env, path);
+        // 直接处理捐赠请求，不需要Request对象
+        response = await handleDonationsDirect(httpMethod, body, env, path);
         break;
 
       case path === '/health' || path === '/health/':
