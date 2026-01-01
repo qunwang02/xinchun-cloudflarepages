@@ -74,6 +74,8 @@ async function handleTest(request, env) {
 async function handleDonationsDirect(httpMethod, body, env, path) {
   const method = httpMethod.toUpperCase();
   
+  console.log(`[handleDonationsDirect] Processing ${method} request to ${path}`);
+  
   try {
     switch (method) {
       case 'GET':
@@ -100,6 +102,7 @@ async function handleDonationsDirect(httpMethod, body, env, path) {
     }
   } catch (error) {
     console.error('Donations API error:', error);
+    console.error('Error stack:', error.stack);
     return createErrorResponse(error);
   }
 }
