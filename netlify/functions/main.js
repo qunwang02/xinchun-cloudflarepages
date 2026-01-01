@@ -4,7 +4,7 @@
 // 导入 MongoDB 工具函数
 import { getDonationCollection, isValidObjectId, checkMongoHealth } from '../../src/utils/mongodb.js';
 
-// 辅助函数：生成响应
+// 辅助函数：生成响应 - Netlify Functions兼容格式
 function createResponse(data, status = 200, headers = {}) {
   const defaultHeaders = {
     'Content-Type': 'application/json',
@@ -13,10 +13,11 @@ function createResponse(data, status = 200, headers = {}) {
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
 
-  return new Response(JSON.stringify(data), {
-    status,
+  return {
+    statusCode: status,
     headers: { ...defaultHeaders, ...headers },
-  });
+    body: JSON.stringify(data),
+  };
 }
 
 // 错误响应
@@ -28,17 +29,18 @@ function createErrorResponse(error, status = 500) {
   }, status);
 }
 
-// 处理预检请求
+// 处理预检请求 - Netlify Functions兼容格式
 function handlePreflight() {
-  return new Response(null, {
-    status: 204,
+  return {
+    statusCode: 204,
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       'Access-Control-Max-Age': '86400',
     },
-  });
+    body: null,
+  };
 }
 
 // 测试API处理器
